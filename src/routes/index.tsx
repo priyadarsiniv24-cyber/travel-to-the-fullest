@@ -212,7 +212,7 @@ function TravelApp({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
-function Header({ onLogo }: { onLogo: () => void }) {
+function Header({ onLogo, onSignOut }: { onLogo: () => void; onSignOut: () => void }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/5 bg-slate-900/80 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
@@ -225,11 +225,14 @@ function Header({ onLogo }: { onLogo: () => void }) {
             <span className="text-white/60">AI</span>
           </span>
         </button>
-        <nav className="hidden items-center gap-6 text-sm text-white/60 sm:flex">
-          <a className="transition hover:text-white" href="#features">Features</a>
-          <a className="transition hover:text-white" href="#how">How it works</a>
-          <button className="rounded-lg bg-white/10 px-4 py-2 font-medium text-white transition hover:bg-white/20">
-            Sign in
+        <nav className="flex items-center gap-6 text-sm text-white/60">
+          <a className="hidden transition hover:text-white sm:inline" href="#features">Features</a>
+          <a className="hidden transition hover:text-white sm:inline" href="#how">How it works</a>
+          <button
+            onClick={onSignOut}
+            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 font-medium text-white transition hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300"
+          >
+            Sign out
           </button>
         </nav>
       </div>
