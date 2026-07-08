@@ -165,7 +165,7 @@ const BUDGET = [
   { label: "Activities", pct: 15, color: "bg-fuchsia-500" },
 ];
 
-function TravelApp() {
+function TravelApp({ onSignOut }: { onSignOut: () => void }) {
   const [view, setView] = useState<View>("landing");
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<Set<string>>(new Set(["🌱 Gluten-Free", "🏛️ Architecture"]));
