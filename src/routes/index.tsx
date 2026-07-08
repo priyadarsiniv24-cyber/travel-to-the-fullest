@@ -195,7 +195,7 @@ function TravelApp({ onSignOut }: { onSignOut: () => void }) {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white antialiased">
-      <Header onLogo={reset} />
+      <Header onLogo={reset} onSignOut={onSignOut} />
       {view === "landing" && (
         <Landing
           query={query}
