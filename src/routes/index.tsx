@@ -2,8 +2,87 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
 export const Route = createFileRoute("/")({
-  component: TravelApp,
+  component: App,
 });
+
+function App() {
+  const [authed, setAuthed] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+
+  const handleSignIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLeaving(true);
+    setTimeout(() => {
+      setAuthed(true);
+      setLeaving(false);
+    }, 650);
+  };
+
+  const handleSignOut = () => setAuthed(false);
+
+  if (!authed) return <AuthGate leaving={leaving} onSubmit={handleSignIn} />;
+  return (
+    <div className="animate-[fade-in_0.5s_ease-out]">
+      <TravelApp onSignOut={handleSignOut} />
+    </div>
+  );
+}
+
+function AuthGate({ leaving, onSubmit }: { leaving: boolean; onSubmit: (e: React.FormEvent) => void }) {
+  return (
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950 px-4 transition-all duration-700 ${
+        leaving ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100"
+      }`}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.25),transparent_50%),radial-gradient(circle_at_80%_80%,rgba(99,102,241,0.25),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:44px_44px]" />
+      <div className="relative w-full max-w-md animate-[scale-in_0.4s_ease-out] rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-emerald-500/10 backdrop-blur-xl">
+        <div className="mb-8 flex flex-col items-center gap-3 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-indigo-500 text-2xl font-black shadow-lg shadow-emerald-500/30">
+            ✈
+          </span>
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            Aero<span className="bg-gradient-to-r from-emerald-400 to-indigo-400 bg-clip-text text-transparent">Travel</span>{" "}
+            <span className="text-white/60">AI</span>
+          </h1>
+          <p className="text-sm text-white/60">Sign in to plan your next journey</p>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-white/50">Email</label>
+            <input
+              type="email"
+              required
+              defaultValue="traveler@aero.ai"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-emerald-400/50 focus:bg-white/10"
+              placeholder="you@example.com"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-white/50">Password</label>
+            <input
+              type="password"
+              required
+              defaultValue="demo1234"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-emerald-400/50 focus:bg-white/10"
+              placeholder="••••••••"
+            />
+          </div>
+          <button
+            type="submit"
+            className="mt-2 w-full rounded-xl bg-gradient-to-r from-emerald-400 to-indigo-500 px-4 py-3 font-semibold text-slate-950 shadow-lg shadow-emerald-500/30 transition hover:scale-[1.02] hover:shadow-emerald-500/50"
+          >
+            Sign In →
+          </button>
+          <p className="pt-2 text-center text-xs text-white/40">
+            New here? <span className="cursor-pointer text-emerald-400 hover:underline">Create an account</span>
+          </p>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 type View = "landing" | "loading" | "dashboard";
 
@@ -86,7 +165,7 @@ const BUDGET = [
   { label: "Activities", pct: 15, color: "bg-fuchsia-500" },
 ];
 
-function TravelApp() {
+function TravelApp({ onSignOut }: { onSignOut: () => void }) {
   const [view, setView] = useState<View>("landing");
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<Set<string>>(new Set(["🌱 Gluten-Free", "🏛️ Architecture"]));
@@ -116,7 +195,7 @@ function TravelApp() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white antialiased">
-      <Header onLogo={reset} />
+      <Header onLogo={reset} onSignOut={onSignOut} />
       {view === "landing" && (
         <Landing
           query={query}
@@ -133,7 +212,7 @@ function TravelApp() {
   );
 }
 
-function Header({ onLogo }: { onLogo: () => void }) {
+function Header({ onLogo, onSignOut }: { onLogo: () => void; onSignOut: () => void }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/5 bg-slate-900/80 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
@@ -146,11 +225,14 @@ function Header({ onLogo }: { onLogo: () => void }) {
             <span className="text-white/60">AI</span>
           </span>
         </button>
-        <nav className="hidden items-center gap-6 text-sm text-white/60 sm:flex">
-          <a className="transition hover:text-white" href="#features">Features</a>
-          <a className="transition hover:text-white" href="#how">How it works</a>
-          <button className="rounded-lg bg-white/10 px-4 py-2 font-medium text-white transition hover:bg-white/20">
-            Sign in
+        <nav className="flex items-center gap-6 text-sm text-white/60">
+          <a className="hidden transition hover:text-white sm:inline" href="#features">Features</a>
+          <a className="hidden transition hover:text-white sm:inline" href="#how">How it works</a>
+          <button
+            onClick={onSignOut}
+            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 font-medium text-white transition hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300"
+          >
+            Sign out
           </button>
         </nav>
       </div>
