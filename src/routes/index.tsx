@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export const Route = createFileRoute("/")({
   component: App,
@@ -85,6 +85,7 @@ function AuthGate({ leaving, onSubmit }: { leaving: boolean; onSubmit: (e: React
 }
 
 type View = "landing" | "loading" | "dashboard";
+type Tab = "planner" | "navigator" | "journal";
 
 const FILTERS = [
   "🌱 Gluten-Free",
@@ -158,12 +159,38 @@ const TIMELINE = [
   },
 ];
 
-const BUDGET = [
-  { label: "Flights", pct: 40, color: "bg-emerald-500" },
-  { label: "Lodging", pct: 30, color: "bg-indigo-500" },
-  { label: "Food", pct: 15, color: "bg-amber-500" },
-  { label: "Activities", pct: 15, color: "bg-fuchsia-500" },
+const CHECKIN_PLACES = [
+  "Notre-Dame Cathedral",
+  "Louvre Museum",
+  "Eiffel Tower",
+  "Sainte-Chapelle",
+  "Musée d'Orsay",
+  "Le Marais District",
+  "Palais Royal",
+  "Père Lachaise",
+  "Versailles Palace",
+  "Rue Cler Market",
 ];
+
+type Visit = { id: string; place: string; startedAt: number; endedAt?: number };
+type Photo = { id: string; url: string; day: string; place: string; caption: string; timestamp: number };
+type Expense = { id: string; label: string; amount: number; category: ExpenseCategory; timestamp: number };
+type ExpenseCategory = "Flight" | "Accommodation" | "Food" | "Transit";
+
+const INITIAL_EXPENSES: Expense[] = [
+  { id: "e1", label: "United JFK→CDG round-trip", amount: 612, category: "Flight", timestamp: Date.now() - 8e7 },
+  { id: "e2", label: "Hôtel Le Marais · 5 nights", amount: 720, category: "Accommodation", timestamp: Date.now() - 7e7 },
+  { id: "e3", label: "Noglu dinner", amount: 62, category: "Food", timestamp: Date.now() - 6e7 },
+  { id: "e4", label: "Louvre evening entry", amount: 22, category: "Transit", timestamp: Date.now() - 5e7 },
+  { id: "e5", label: "Metro carnet (10 tickets)", amount: 17, category: "Transit", timestamp: Date.now() - 4e7 },
+];
+
+const CATEGORY_META: Record<ExpenseCategory, { color: string; icon: string; label: string }> = {
+  Flight: { color: "bg-emerald-500", icon: "✈️", label: "Flight Expenses" },
+  Accommodation: { color: "bg-indigo-500", icon: "🏨", label: "Accommodation/Hotel" },
+  Food: { color: "bg-amber-500", icon: "🍽️", label: "Food & Dining" },
+  Transit: { color: "bg-fuchsia-500", icon: "🚇", label: "Transit/Activities" },
+};
 
 function TravelApp({ onSignOut }: { onSignOut: () => void }) {
   const [view, setView] = useState<View>("landing");
@@ -189,21 +216,13 @@ function TravelApp({ onSignOut }: { onSignOut: () => void }) {
     setView("loading");
   };
 
-  const reset = () => {
-    setView("landing");
-  };
+  const reset = () => setView("landing");
 
   return (
     <div className="min-h-screen bg-slate-900 text-white antialiased">
       <Header onLogo={reset} onSignOut={onSignOut} />
       {view === "landing" && (
-        <Landing
-          query={query}
-          setQuery={setQuery}
-          active={active}
-          toggle={toggle}
-          onGenerate={generate}
-        />
+        <Landing query={query} setQuery={setQuery} active={active} toggle={toggle} onGenerate={generate} />
       )}
       {view === "loading" && <Loading query={query} />}
       {view === "dashboard" && <Dashboard query={query} active={active} onReset={reset} />}
@@ -255,7 +274,6 @@ function Landing({
 }) {
   return (
     <main className="relative overflow-hidden">
-      {/* glow */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute -top-40 left-1/2 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-emerald-500/20 blur-3xl" />
         <div className="absolute top-40 right-0 h-[400px] w-[600px] rounded-full bg-indigo-500/20 blur-3xl" />
@@ -370,6 +388,17 @@ function Loading({ query }: { query: string }) {
 }
 
 function Dashboard({ query, active, onReset }: { query: string; active: Set<string>; onReset: () => void }) {
+  const [tab, setTab] = useState<Tab>("planner");
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
+
+  const tabs: { id: Tab; label: string; icon: string }[] = [
+    { id: "planner", label: "AI Planner", icon: "🗺️" },
+    { id: "navigator", label: "Active Navigator", icon: "🧳" },
+    { id: "journal", label: "Travel Journal", icon: "📸" },
+  ];
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -390,19 +419,612 @@ function Dashboard({ query, active, onReset }: { query: string; active: Set<stri
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <FlightWidget />
-          <TimelineWidget />
-        </div>
-        <div className="space-y-6">
-          <LivingDock />
-          <BudgetWidget />
-        </div>
+      {/* Tab bar */}
+      <div className="mb-8 flex gap-1 rounded-2xl border border-white/10 bg-white/5 p-1 backdrop-blur">
+        {tabs.map((t) => {
+          const on = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-all ${
+                on
+                  ? "bg-gradient-to-r from-emerald-500 to-indigo-500 text-white shadow-lg shadow-emerald-500/20"
+                  : "text-white/60 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <span className="mr-1.5">{t.icon}</span>
+              <span className="hidden sm:inline">{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="animate-[fade-in_0.4s_ease-out]" key={tab}>
+        {tab === "planner" && <PlannerTab expenses={expenses} />}
+        {tab === "navigator" && <NavigatorTab visits={visits} setVisits={setVisits} />}
+        {tab === "journal" && <JournalTab photos={photos} setPhotos={setPhotos} expenses={expenses} setExpenses={setExpenses} />}
       </div>
     </main>
   );
 }
+
+function PlannerTab({ expenses }: { expenses: Expense[] }) {
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="space-y-6 lg:col-span-2">
+        <FlightWidget />
+        <TimelineWidget />
+      </div>
+      <div className="space-y-6">
+        <LivingDock />
+        <BudgetWidget expenses={expenses} />
+      </div>
+    </div>
+  );
+}
+
+function NavigatorTab({ visits, setVisits }: { visits: Visit[]; setVisits: React.Dispatch<React.SetStateAction<Visit[]>> }) {
+  const [selectedPlace, setSelectedPlace] = useState(CHECKIN_PLACES[0]);
+  const [directionsFor, setDirectionsFor] = useState<string | null>(null);
+
+  const active = visits.find((v) => !v.endedAt);
+
+  const checkIn = () => {
+    setVisits((prev) => {
+      const now = Date.now();
+      const closed = prev.map((v) => (v.endedAt ? v : { ...v, endedAt: now }));
+      return [...closed, { id: `v_${now}`, place: selectedPlace, startedAt: now }];
+    });
+  };
+
+  const checkOut = () => {
+    setVisits((prev) => prev.map((v) => (v.endedAt ? v : { ...v, endedAt: Date.now() })));
+  };
+
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="lg:col-span-2 space-y-6">
+        <Card title="Active Trip Tracker" icon="📍">
+          <div className="rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 to-indigo-500/10 p-5">
+            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-emerald-300">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              {active ? "Currently checked in" : "Ready to explore"}
+            </div>
+            <div className="mt-2 text-2xl font-bold">
+              {active ? active.place : "Pick your next stop"}
+            </div>
+            {active && <LiveTimer since={active.startedAt} label="Time spent here" big />}
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <select
+              value={selectedPlace}
+              onChange={(e) => setSelectedPlace(e.target.value)}
+              className="flex-1 rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-white outline-none focus:border-emerald-400/50"
+            >
+              {CHECKIN_PLACES.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <button
+              onClick={checkIn}
+              className="rounded-xl bg-gradient-to-r from-emerald-500 to-indigo-500 px-6 py-3 font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:scale-[1.02]"
+            >
+              📍 Check-In
+            </button>
+            {active && (
+              <button
+                onClick={checkOut}
+                className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 font-medium text-red-300 transition hover:bg-red-500/20"
+              >
+                End Visit
+              </button>
+            )}
+          </div>
+        </Card>
+
+        <Card title="Places Visited on This Trip" icon="🧭">
+          {visits.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 bg-slate-900/40 p-8 text-center text-sm text-white/40">
+              No check-ins yet. Tap Check-In above to start logging your journey.
+            </div>
+          ) : (
+            <ol className="space-y-3">
+              {[...visits].reverse().map((v, idx) => {
+                const isActive = !v.endedAt;
+                return (
+                  <li
+                    key={v.id}
+                    className={`rounded-xl border p-4 transition ${
+                      isActive ? "border-emerald-400/40 bg-emerald-400/5" : "border-white/5 bg-slate-900/40"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-indigo-500 text-xs font-bold text-slate-950">
+                            {visits.length - idx}
+                          </span>
+                          <div className="font-semibold">{v.place}</div>
+                          {isActive && (
+                            <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
+                              Active
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1.5 text-xs text-white/50">
+                          Checked in at {new Date(v.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {" · "}
+                          {isActive ? (
+                            <LiveTimer since={v.startedAt} label="Time spent here" />
+                          ) : (
+                            <>Time spent here: {fmtDuration((v.endedAt! - v.startedAt))}</>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setDirectionsFor(directionsFor === v.id ? null : v.id)}
+                        className="flex items-center gap-1.5 rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-300 transition hover:bg-indigo-500/20"
+                      >
+                        <MapIcon /> {directionsFor === v.id ? "Hide" : "Get Directions"}
+                      </button>
+                    </div>
+
+                    {directionsFor === v.id && <DirectionsOverlay place={v.place} />}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </Card>
+      </div>
+
+      <div className="space-y-6">
+        <Card title="Trip Stats" icon="📊">
+          <div className="space-y-3">
+            <Stat label="Places checked in" value={visits.length.toString()} />
+            <Stat label="Currently exploring" value={active ? "1" : "0"} />
+            <Stat
+              label="Total time logged"
+              value={fmtDuration(
+                visits.reduce((sum, v) => sum + ((v.endedAt ?? Date.now()) - v.startedAt), 0)
+              )}
+            />
+          </div>
+        </Card>
+        <Card title="Nearby Now" icon="🌐">
+          <div className="space-y-2">
+            {["Café de Flore · 2 min walk", "Metro Saint-Michel · 4 min", "Shakespeare & Co · 6 min"].map((p) => (
+              <div key={p} className="rounded-lg border border-white/5 bg-slate-900/40 px-3 py-2 text-sm text-white/80">
+                {p}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function LiveTimer({ since, label, big }: { since: number; label: string; big?: boolean }) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => force((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const elapsed = Date.now() - since;
+  if (big) {
+    return (
+      <div className="mt-3">
+        <div className="text-[10px] uppercase tracking-wider text-white/50">{label}</div>
+        <div className="mt-1 font-mono text-3xl font-black tabular-nums text-white">{fmtDuration(elapsed)}</div>
+      </div>
+    );
+  }
+  return (
+    <span className="font-mono tabular-nums text-emerald-300">
+      {label}: {fmtDuration(elapsed)}
+    </span>
+  );
+}
+
+function fmtDuration(ms: number) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m`;
+  if (m > 0) return `${m}m ${sec.toString().padStart(2, "0")}s`;
+  return `${sec}s`;
+}
+
+function MapIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
+      <line x1="8" y1="2" x2="8" y2="18" />
+      <line x1="16" y1="6" x2="16" y2="22" />
+    </svg>
+  );
+}
+
+function DirectionsOverlay({ place }: { place: string }) {
+  const transit = 8 + Math.floor(Math.random() * 15);
+  const walk = 0.4 + Math.random() * 1.6;
+  const eta = new Date(Date.now() + transit * 60000);
+  return (
+    <div className="mt-4 animate-[fade-in_0.3s_ease-out] overflow-hidden rounded-xl border border-indigo-400/30 bg-slate-950/60">
+      <div className="relative h-40 overflow-hidden bg-[radial-gradient(circle_at_30%_40%,rgba(16,185,129,0.25),transparent_50%),radial-gradient(circle_at_70%_60%,rgba(99,102,241,0.25),transparent_50%)]">
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:24px_24px]" />
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 400 160" preserveAspectRatio="none">
+          <path
+            d="M30,130 Q120,20 200,90 T370,40"
+            fill="none"
+            stroke="url(#g)"
+            strokeWidth="3"
+            strokeDasharray="6 6"
+            className="animate-pulse"
+          />
+          <defs>
+            <linearGradient id="g" x1="0" x2="1">
+              <stop offset="0%" stopColor="#34d399" />
+              <stop offset="100%" stopColor="#818cf8" />
+            </linearGradient>
+          </defs>
+          <circle cx="30" cy="130" r="6" fill="#34d399" />
+          <circle cx="370" cy="40" r="6" fill="#818cf8" />
+        </svg>
+        <div className="absolute left-3 top-3 rounded-md bg-slate-900/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+          You
+        </div>
+        <div className="absolute right-3 bottom-3 rounded-md bg-slate-900/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-300">
+          {place}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-white/5 border-t border-white/5 text-center text-xs">
+        <div className="p-3">
+          <div className="text-white/40">Transit</div>
+          <div className="mt-0.5 font-bold text-white">{transit} min</div>
+        </div>
+        <div className="p-3">
+          <div className="text-white/40">Walking</div>
+          <div className="mt-0.5 font-bold text-white">{walk.toFixed(1)} km</div>
+        </div>
+        <div className="p-3">
+          <div className="text-white/40">Active ETA</div>
+          <div className="mt-0.5 font-bold text-emerald-300">
+            {eta.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-white/5 bg-slate-900/40 px-4 py-3">
+      <span className="text-sm text-white/60">{label}</span>
+      <span className="font-mono text-lg font-bold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+/* --------------------- JOURNAL TAB --------------------- */
+
+function JournalTab({
+  photos,
+  setPhotos,
+  expenses,
+  setExpenses,
+}: {
+  photos: Photo[];
+  setPhotos: React.Dispatch<React.SetStateAction<Photo[]>>;
+  expenses: Expense[];
+  setExpenses: React.Dispatch<React.SetStateAction<Expense[]>>;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="lg:col-span-2 space-y-6">
+        <Card title="Trip Memories" icon="📸">
+          <UploadZone photos={photos} setPhotos={setPhotos} />
+          <PhotoGallery photos={photos} setPhotos={setPhotos} />
+        </Card>
+      </div>
+      <div className="space-y-6">
+        <ExpenseLedger expenses={expenses} setExpenses={setExpenses} />
+      </div>
+    </div>
+  );
+}
+
+function UploadZone({
+  photos,
+  setPhotos,
+}: {
+  photos: Photo[];
+  setPhotos: React.Dispatch<React.SetStateAction<Photo[]>>;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const [day, setDay] = useState(TIMELINE[0].day);
+  const [place, setPlace] = useState(CHECKIN_PLACES[0]);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = (files: FileList | File[]) => {
+    const arr = Array.from(files).slice(0, 12);
+    const now = Date.now();
+    const newPhotos: Photo[] = arr.map((f, i) => ({
+      id: `p_${now}_${i}`,
+      url: URL.createObjectURL(f),
+      day,
+      place,
+      caption: "",
+      timestamp: now + i,
+    }));
+    setPhotos((prev) => [...prev, ...newPhotos]);
+  };
+
+  const addSimulated = () => {
+    const now = Date.now();
+    const seed = Math.floor(Math.random() * 9999);
+    const simulated: Photo = {
+      id: `p_${now}`,
+      url: `https://picsum.photos/seed/${seed}/600/400`,
+      day,
+      place,
+      caption: "",
+      timestamp: now,
+    };
+    setPhotos((prev) => [...prev, simulated]);
+  };
+
+  return (
+    <div>
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <select
+          value={day}
+          onChange={(e) => setDay(e.target.value)}
+          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
+        >
+          {TIMELINE.map((d) => <option key={d.day}>{d.day}</option>)}
+        </select>
+        <select
+          value={place}
+          onChange={(e) => setPlace(e.target.value)}
+          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
+        >
+          {CHECKIN_PLACES.map((p) => <option key={p}>{p}</option>)}
+        </select>
+      </div>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+          else addSimulated();
+        }}
+        onClick={() => inputRef.current?.click()}
+        className={`cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition ${
+          dragging
+            ? "border-emerald-400/60 bg-emerald-400/5"
+            : "border-white/15 bg-slate-900/40 hover:border-emerald-400/40 hover:bg-white/[0.03]"
+        }`}
+      >
+        <div className="text-4xl">📷</div>
+        <div className="mt-3 font-semibold">Drop photos here</div>
+        <div className="mt-1 text-sm text-white/50">or click to add — tagged to {day} · {place}</div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => e.target.files && addFiles(e.target.files)}
+        />
+        <button
+          onClick={(e) => { e.stopPropagation(); addSimulated(); }}
+          className="mt-4 rounded-lg bg-white/5 px-4 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10"
+        >
+          + Add simulated photo
+        </button>
+      </div>
+      <div className="mt-2 text-right text-xs text-white/40">{photos.length} photo{photos.length === 1 ? "" : "s"} in this trip</div>
+    </div>
+  );
+}
+
+function PhotoGallery({
+  photos,
+  setPhotos,
+}: {
+  photos: Photo[];
+  setPhotos: React.Dispatch<React.SetStateAction<Photo[]>>;
+}) {
+  const grouped = useMemo(() => {
+    const g: Record<string, Photo[]> = {};
+    photos.forEach((p) => {
+      const key = `${p.day} · ${p.place}`;
+      (g[key] ||= []).push(p);
+    });
+    return g;
+  }, [photos]);
+
+  const updateCaption = (id: string, caption: string) => {
+    setPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, caption } : p)));
+  };
+
+  const remove = (id: string) => setPhotos((prev) => prev.filter((p) => p.id !== id));
+
+  if (photos.length === 0) {
+    return (
+      <div className="mt-6 rounded-xl border border-dashed border-white/10 bg-slate-900/40 p-8 text-center text-sm text-white/40">
+        Your memories will appear here as beautiful grouped cards.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 space-y-6">
+      {Object.entries(grouped).map(([group, items]) => (
+        <div key={group}>
+          <div className="mb-3 flex items-center gap-2">
+            <div className="h-px flex-1 bg-white/10" />
+            <div className="text-xs font-bold uppercase tracking-wider text-emerald-300">{group}</div>
+            <div className="h-px flex-1 bg-white/10" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {items.map((p) => (
+              <div key={p.id} className="group overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur transition hover:border-emerald-400/40 hover:shadow-xl hover:shadow-emerald-500/10">
+                <div className="relative aspect-[4/3] overflow-hidden bg-slate-950">
+                  <img src={p.url} alt={p.caption || p.place} className="h-full w-full object-cover transition group-hover:scale-105" />
+                  <button
+                    onClick={() => remove(p.id)}
+                    className="absolute right-2 top-2 rounded-md bg-slate-900/80 px-2 py-1 text-[10px] font-bold text-red-300 opacity-0 transition group-hover:opacity-100 hover:bg-red-500/30"
+                  >
+                    Remove
+                  </button>
+                  <div className="absolute bottom-2 left-2 rounded-md bg-slate-900/70 px-2 py-0.5 text-[10px] font-medium text-white/80 backdrop-blur">
+                    {new Date(p.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                </div>
+                <input
+                  value={p.caption}
+                  onChange={(e) => updateCaption(p.id, e.target.value)}
+                  placeholder="Write a caption or journal note…"
+                  className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* --------------------- EXPENSES --------------------- */
+
+function ExpenseLedger({
+  expenses,
+  setExpenses,
+}: {
+  expenses: Expense[];
+  setExpenses: React.Dispatch<React.SetStateAction<Expense[]>>;
+}) {
+  const [label, setLabel] = useState("");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState<ExpenseCategory>("Food");
+
+  const totals = useMemo(() => {
+    const t: Record<ExpenseCategory, number> = { Flight: 0, Accommodation: 0, Food: 0, Transit: 0 };
+    expenses.forEach((e) => { t[e.category] += e.amount; });
+    return t;
+  }, [expenses]);
+
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
+
+  const add = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(amount);
+    if (!label.trim() || !amt || amt <= 0) return;
+    setExpenses((prev) => [
+      ...prev,
+      { id: `e_${Date.now()}`, label: label.trim(), amount: amt, category, timestamp: Date.now() },
+    ]);
+    setLabel("");
+    setAmount("");
+  };
+
+  const remove = (id: string) => setExpenses((prev) => prev.filter((e) => e.id !== id));
+
+  return (
+    <Card title="Live Expense Ledger" icon="💰">
+      <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+        <div className="text-xs font-medium uppercase tracking-wider text-white/50">Total spent</div>
+        <div className="mt-1 text-3xl font-black tabular-nums">${total.toFixed(0)}</div>
+        <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-white/5">
+          {(Object.keys(totals) as ExpenseCategory[]).map((k) => {
+            const pct = total > 0 ? (totals[k] / total) * 100 : 0;
+            return <div key={k} className={`${CATEGORY_META[k].color} transition-all duration-500`} style={{ width: `${pct}%` }} />;
+          })}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+          {(Object.keys(totals) as ExpenseCategory[]).map((k) => (
+            <div key={k} className="flex items-center justify-between rounded-lg bg-white/5 px-2 py-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className={`h-2.5 w-2.5 rounded-sm ${CATEGORY_META[k].color}`} />
+                <span className="text-white/70">{CATEGORY_META[k].icon}</span>
+              </div>
+              <span className="font-mono font-bold tabular-nums">${totals[k].toFixed(0)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <form onSubmit={add} className="mt-4 space-y-2 rounded-xl border border-white/10 bg-slate-900/40 p-3">
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="e.g., Dinner at local bistro"
+          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:border-emerald-400/50"
+        />
+        <div className="flex gap-2">
+          <input
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            type="number"
+            step="0.01"
+            placeholder="$45"
+            className="w-24 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:border-emerald-400/50"
+          />
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
+            className="flex-1 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:border-emerald-400/50"
+          >
+            {(Object.keys(CATEGORY_META) as ExpenseCategory[]).map((k) => (
+              <option key={k} value={k}>{CATEGORY_META[k].icon} {k}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="w-full rounded-lg bg-gradient-to-r from-emerald-500 to-indigo-500 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:scale-[1.01]"
+        >
+          + Add Expense
+        </button>
+      </form>
+
+      <div className="mt-4 max-h-80 space-y-1.5 overflow-y-auto pr-1">
+        {[...expenses].reverse().map((e) => (
+          <div key={e.id} className="group flex items-center justify-between rounded-lg border border-white/5 bg-slate-900/40 px-3 py-2 text-sm transition hover:border-white/10">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className={`h-2 w-2 shrink-0 rounded-full ${CATEGORY_META[e.category].color}`} />
+              <span className="truncate">{e.label}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono font-bold tabular-nums text-white">${e.amount.toFixed(0)}</span>
+              <button
+                onClick={() => remove(e.id)}
+                className="rounded px-1.5 text-xs text-white/30 opacity-0 transition hover:text-red-300 group-hover:opacity-100"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* --------------------- PLANNER WIDGETS --------------------- */
 
 function Card({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
   return (
@@ -429,20 +1051,14 @@ function FlightWidget() {
             >
               <div className="min-w-0">
                 <div className="font-semibold">{f.airline}</div>
-                <div className="text-sm text-white/50">
-                  {f.route} · {f.duration}
-                </div>
+                <div className="text-sm text-white/50">{f.route} · {f.duration}</div>
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-right">
                   <div className="text-lg font-bold">{f.price}</div>
                   <div className="text-xs text-white/40">round-trip</div>
                 </div>
-                <div
-                  className={`rounded-lg px-3 py-2 text-center text-xs font-bold ${
-                    buy ? "bg-emerald-500 text-slate-900" : "bg-amber-500 text-slate-900"
-                  }`}
-                >
+                <div className={`rounded-lg px-3 py-2 text-center text-xs font-bold ${buy ? "bg-emerald-500 text-slate-900" : "bg-amber-500 text-slate-900"}`}>
                   <div>{f.verdict}</div>
                   <div className="mt-0.5 opacity-80">{f.confidence}% Confidence</div>
                 </div>
@@ -516,33 +1132,44 @@ function TimelineWidget() {
   );
 }
 
-function BudgetWidget() {
-  const total = useMemo(() => "$2,400", []);
+function BudgetWidget({ expenses }: { expenses: Expense[] }) {
+  const totals = useMemo(() => {
+    const t: Record<ExpenseCategory, number> = { Flight: 0, Accommodation: 0, Food: 0, Transit: 0 };
+    expenses.forEach((e) => { t[e.category] += e.amount; });
+    return t;
+  }, [expenses]);
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
   return (
     <Card title="Financial Allocation" icon="💰">
       <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
-        <div className="text-xs font-medium uppercase tracking-wider text-white/50">Projected Total Budget</div>
-        <div className="mt-1 text-3xl font-black">{total}</div>
+        <div className="text-xs font-medium uppercase tracking-wider text-white/50">Projected Total</div>
+        <div className="mt-1 text-3xl font-black tabular-nums">${total.toFixed(0)}</div>
       </div>
-
       <div className="mt-4">
         <div className="flex h-3 w-full overflow-hidden rounded-full bg-white/5">
-          {BUDGET.map((b) => (
-            <div key={b.label} className={`${b.color} h-full transition-all`} style={{ width: `${b.pct}%` }} />
-          ))}
+          {(Object.keys(totals) as ExpenseCategory[]).map((k) => {
+            const pct = total > 0 ? (totals[k] / total) * 100 : 0;
+            return <div key={k} className={`${CATEGORY_META[k].color} h-full transition-all duration-500`} style={{ width: `${pct}%` }} />;
+          })}
         </div>
         <div className="mt-4 space-y-2">
-          {BUDGET.map((b) => (
-            <div key={b.label} className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                <span className={`h-2.5 w-2.5 rounded-sm ${b.color}`} />
-                <span className="text-white/80">{b.label}</span>
+          {(Object.keys(totals) as ExpenseCategory[]).map((k) => {
+            const pct = total > 0 ? (totals[k] / total) * 100 : 0;
+            return (
+              <div key={k} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2.5 w-2.5 rounded-sm ${CATEGORY_META[k].color}`} />
+                  <span className="text-white/80">{CATEGORY_META[k].label}</span>
+                </div>
+                <div className="text-white/60">
+                  {pct.toFixed(0)}% · <span className="font-mono tabular-nums text-white">${totals[k].toFixed(0)}</span>
+                </div>
               </div>
-              <div className="text-white/60">
-                {b.pct}% · <span className="text-white">${Math.round(2400 * (b.pct / 100))}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
+        </div>
+        <div className="mt-4 rounded-lg border border-emerald-400/20 bg-emerald-400/5 p-3 text-xs text-emerald-200/80">
+          💡 Add quick expenses in the <b>Travel Journal</b> tab to see this update live.
         </div>
       </div>
     </Card>
