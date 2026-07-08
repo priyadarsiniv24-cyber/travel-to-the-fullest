@@ -85,6 +85,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "AeroTravel AI — Smart Itinerary Planner" },
+      { name: "twitter:description", content: "AI-powered travel planning: flights, stays, restaurants, and route-optimized itineraries in seconds." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/038ce9f2-5b57-4352-ad14-bd910d7ef721/id-preview-59084cc4--b835ea5d-33bc-4e99-bd83-9008f3a0da0b.lovable.app-1783493770123.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/038ce9f2-5b57-4352-ad14-bd910d7ef721/id-preview-59084cc4--b835ea5d-33bc-4e99-bd83-9008f3a0da0b.lovable.app-1783493770123.png" },
     ],
     links: [
       {
