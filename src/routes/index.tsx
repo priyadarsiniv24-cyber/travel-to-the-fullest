@@ -5,22 +5,46 @@ export const Route = createFileRoute("/")({
   component: App,
 });
 
+/* ============================================================
+   AUTH
+   ============================================================ */
+
+type User = { email: string; password: string };
+
 function App() {
+  const [users, setUsers] = useState<User[]>([
+    { email: "traveler@aero.ai", password: "demo1234" },
+  ]);
   const [authed, setAuthed] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
-  const handleSignIn = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSignIn = (email: string, password: string): string | null => {
+    const match = users.find(
+      (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password,
+    );
+    if (!match) return "Invalid email or password.";
     setLeaving(true);
     setTimeout(() => {
       setAuthed(true);
       setLeaving(false);
     }, 650);
+    return null;
+  };
+
+  const handleSignUp = (email: string, password: string): string | null => {
+    if (!email.includes("@")) return "Please enter a valid email.";
+    if (password.length < 6) return "Password must be at least 6 characters.";
+    if (users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
+      return "An account with this email already exists.";
+    }
+    setUsers((prev) => [...prev, { email, password }]);
+    return null;
   };
 
   const handleSignOut = () => setAuthed(false);
 
-  if (!authed) return <AuthGate leaving={leaving} onSubmit={handleSignIn} />;
+  if (!authed)
+    return <AuthGate leaving={leaving} onSignIn={handleSignIn} onSignUp={handleSignUp} />;
   return (
     <div className="animate-[fade-in_0.5s_ease-out]">
       <TravelApp onSignOut={handleSignOut} />
@@ -28,7 +52,43 @@ function App() {
   );
 }
 
-function AuthGate({ leaving, onSubmit }: { leaving: boolean; onSubmit: (e: React.FormEvent) => void }) {
+function AuthGate({
+  leaving,
+  onSignIn,
+  onSignUp,
+}: {
+  leaving: boolean;
+  onSignIn: (email: string, password: string) => string | null;
+  onSignUp: (email: string, password: string) => string | null;
+}) {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    if (mode === "signup") {
+      const err = onSignUp(email, password);
+      if (err) return setError(err);
+      setSuccess("Account created successfully! You can now sign in.");
+      setMode("signin");
+      setPassword("");
+      return;
+    }
+    const err = onSignIn(email, password);
+    if (err) setError(err);
+  };
+
+  const switchMode = (m: "signin" | "signup") => {
+    setMode(m);
+    setError(null);
+    setSuccess(null);
+  };
+
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950 px-4 transition-all duration-700 ${
@@ -38,7 +98,7 @@ function AuthGate({ leaving, onSubmit }: { leaving: boolean; onSubmit: (e: React
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.25),transparent_50%),radial-gradient(circle_at_80%_80%,rgba(99,102,241,0.25),transparent_50%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:44px_44px]" />
       <div className="relative w-full max-w-md animate-[scale-in_0.4s_ease-out] rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-emerald-500/10 backdrop-blur-xl">
-        <div className="mb-8 flex flex-col items-center gap-3 text-center">
+        <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-indigo-500 text-2xl font-black shadow-lg shadow-emerald-500/30">
             ✈
           </span>
@@ -46,15 +106,40 @@ function AuthGate({ leaving, onSubmit }: { leaving: boolean; onSubmit: (e: React
             Aero<span className="bg-gradient-to-r from-emerald-400 to-indigo-400 bg-clip-text text-transparent">Travel</span>{" "}
             <span className="text-white/60">AI</span>
           </h1>
-          <p className="text-sm text-white/60">Sign in to plan your next journey</p>
+          <p className="text-sm text-white/60">
+            {mode === "signin" ? "Sign in to plan your next journey" : "Create your account to get started"}
+          </p>
         </div>
-        <form onSubmit={onSubmit} className="space-y-4">
+
+        <div className="mb-5 flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+          <button
+            type="button"
+            onClick={() => switchMode("signin")}
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
+              mode === "signin" ? "bg-gradient-to-r from-emerald-500 to-indigo-500 text-white shadow" : "text-white/60 hover:text-white"
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMode("signup")}
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${
+              mode === "signup" ? "bg-gradient-to-r from-emerald-500 to-indigo-500 text-white shadow" : "text-white/60 hover:text-white"
+            }`}
+          >
+            Create Account
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-white/50">Email</label>
             <input
               type="email"
               required
-              defaultValue="traveler@aero.ai"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-emerald-400/50 focus:bg-white/10"
               placeholder="you@example.com"
             />
@@ -64,19 +149,47 @@ function AuthGate({ leaving, onSubmit }: { leaving: boolean; onSubmit: (e: React
             <input
               type="password"
               required
-              defaultValue="demo1234"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-emerald-400/50 focus:bg-white/10"
               placeholder="••••••••"
             />
           </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+              {success}
+            </div>
+          )}
+
           <button
             type="submit"
             className="mt-2 w-full rounded-xl bg-gradient-to-r from-emerald-400 to-indigo-500 px-4 py-3 font-semibold text-slate-950 shadow-lg shadow-emerald-500/30 transition hover:scale-[1.02] hover:shadow-emerald-500/50"
           >
-            Sign In →
+            {mode === "signin" ? "Sign In →" : "Create Account →"}
           </button>
-          <p className="pt-2 text-center text-xs text-white/40">
-            New here? <span className="cursor-pointer text-emerald-400 hover:underline">Create an account</span>
+
+          <p className="pt-1 text-center text-xs text-white/40">
+            {mode === "signin" ? (
+              <>
+                New here?{" "}
+                <span onClick={() => switchMode("signup")} className="cursor-pointer text-emerald-400 hover:underline">
+                  Create an account
+                </span>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <span onClick={() => switchMode("signin")} className="cursor-pointer text-emerald-400 hover:underline">
+                  Sign in
+                </span>
+              </>
+            )}
           </p>
         </form>
       </div>
@@ -84,8 +197,26 @@ function AuthGate({ leaving, onSubmit }: { leaving: boolean; onSubmit: (e: React
   );
 }
 
+/* ============================================================
+   TYPES + DYNAMIC DESTINATION DATASET
+   ============================================================ */
+
 type View = "landing" | "loading" | "dashboard";
 type Tab = "planner" | "navigator" | "journal";
+
+type Flight = { airline: string; route: string; duration: string; price: string; verdict: string; confidence: number };
+type Restaurant = { name: string; cuisine: string; tag: string; time: string };
+type TimelineDay = { day: string; hack: string; slots: { period: string; activity: string }[] };
+
+type Trip = {
+  origin: { city: string; code: string };
+  destination: { city: string; country: string; code: string; neighborhood: string };
+  flights: Flight[];
+  restaurants: Restaurant[];
+  timeline: TimelineDay[];
+  checkinPlaces: string[];
+  seedExpenses: Expense[];
+};
 
 const FILTERS = [
   "🌱 Gluten-Free",
@@ -98,92 +229,10 @@ const FILTERS = [
   "👨‍👩‍👧 Family Friendly",
 ];
 
-const FLIGHTS = [
-  { airline: "United Airlines", route: "JFK → CDG", duration: "7h 25m", price: "$612", verdict: "BUY NOW", confidence: 94 },
-  { airline: "Air France", route: "JFK → CDG", duration: "7h 40m", price: "$684", verdict: "WAIT FOR DROP", confidence: 78 },
-  { airline: "Delta", route: "JFK → CDG", duration: "7h 55m", price: "$701", verdict: "WAIT FOR DROP", confidence: 71 },
-];
-
-const RESTAURANTS = [
-  { name: "Noglu", cuisine: "French Bistro", tag: "100% Celiac Safe", time: "11:30 AM – 1:00 PM" },
-  { name: "Chambelland", cuisine: "Bakery & Café", tag: "Gluten-Free Certified", time: "8:00 AM – 9:30 AM" },
-  { name: "NoGlu Marais", cuisine: "Modern French", tag: "Dedicated GF Kitchen", time: "6:30 PM – 7:45 PM" },
-  { name: "Café Pinson", cuisine: "Organic Vegan", tag: "Allergen Aware", time: "12:00 PM – 1:15 PM" },
-];
-
-const TIMELINE = [
-  {
-    day: "Day 1",
-    hack: "Enter through the side gate at 8:45 AM to skip 90-min queues.",
-    slots: [
-      { period: "Morning", activity: "Notre-Dame exterior + Île de la Cité walk" },
-      { period: "Afternoon", activity: "Sainte-Chapelle stained glass tour" },
-      { period: "Evening", activity: "Seine sunset stroll + dinner at Noglu" },
-    ],
-  },
-  {
-    day: "Day 2",
-    hack: "Book Louvre entry for 6:00 PM — half the crowds, same masterpieces.",
-    slots: [
-      { period: "Morning", activity: "Musée d'Orsay (open at 9:30 AM)" },
-      { period: "Afternoon", activity: "Tuileries Garden + Palais Royal arcades" },
-      { period: "Evening", activity: "Louvre evening entry (Wed / Fri)" },
-    ],
-  },
-  {
-    day: "Day 3",
-    hack: "Take the 82 bus, not the metro — cheaper views of the Eiffel Tower.",
-    slots: [
-      { period: "Morning", activity: "Trocadéro viewpoint + Eiffel Tower climb" },
-      { period: "Afternoon", activity: "Rodin Museum sculpture garden" },
-      { period: "Evening", activity: "Rue Cler food street tasting" },
-    ],
-  },
-  {
-    day: "Day 4",
-    hack: "Père Lachaise map is free at the entrance — skip the paid tours.",
-    slots: [
-      { period: "Morning", activity: "Le Marais architecture walk" },
-      { period: "Afternoon", activity: "Picasso Museum (Marais)" },
-      { period: "Evening", activity: "Père Lachaise golden hour visit" },
-    ],
-  },
-  {
-    day: "Day 5",
-    hack: "Versailles opens at 9 AM — arrive 8:30 to be first through the Hall of Mirrors.",
-    slots: [
-      { period: "Morning", activity: "RER C to Versailles — palace tour" },
-      { period: "Afternoon", activity: "Versailles gardens + Marie-Antoinette estate" },
-      { period: "Evening", activity: "Return to Paris — farewell dinner Le Marais" },
-    ],
-  },
-];
-
-const CHECKIN_PLACES = [
-  "Notre-Dame Cathedral",
-  "Louvre Museum",
-  "Eiffel Tower",
-  "Sainte-Chapelle",
-  "Musée d'Orsay",
-  "Le Marais District",
-  "Palais Royal",
-  "Père Lachaise",
-  "Versailles Palace",
-  "Rue Cler Market",
-];
-
 type Visit = { id: string; place: string; startedAt: number; endedAt?: number };
 type Photo = { id: string; url: string; day: string; place: string; caption: string; timestamp: number };
 type Expense = { id: string; label: string; amount: number; category: ExpenseCategory; timestamp: number };
 type ExpenseCategory = "Flight" | "Accommodation" | "Food" | "Transit";
-
-const INITIAL_EXPENSES: Expense[] = [
-  { id: "e1", label: "United JFK→CDG round-trip", amount: 612, category: "Flight", timestamp: Date.now() - 8e7 },
-  { id: "e2", label: "Hôtel Le Marais · 5 nights", amount: 720, category: "Accommodation", timestamp: Date.now() - 7e7 },
-  { id: "e3", label: "Noglu dinner", amount: 62, category: "Food", timestamp: Date.now() - 6e7 },
-  { id: "e4", label: "Louvre evening entry", amount: 22, category: "Transit", timestamp: Date.now() - 5e7 },
-  { id: "e5", label: "Metro carnet (10 tickets)", amount: 17, category: "Transit", timestamp: Date.now() - 4e7 },
-];
 
 const CATEGORY_META: Record<ExpenseCategory, { color: string; icon: string; label: string }> = {
   Flight: { color: "bg-emerald-500", icon: "✈️", label: "Flight Expenses" },
@@ -192,9 +241,442 @@ const CATEGORY_META: Record<ExpenseCategory, { color: string; icon: string; labe
   Transit: { color: "bg-fuchsia-500", icon: "🚇", label: "Transit/Activities" },
 };
 
+/* ---------- Airport code dictionary for origins ---------- */
+const ORIGIN_CODES: Record<string, { city: string; code: string }> = {
+  chennai: { city: "Chennai", code: "MAA" },
+  mumbai: { city: "Mumbai", code: "BOM" },
+  delhi: { city: "Delhi", code: "DEL" },
+  bangalore: { city: "Bangalore", code: "BLR" },
+  jfk: { city: "New York", code: "JFK" },
+  "new york": { city: "New York", code: "JFK" },
+  nyc: { city: "New York", code: "JFK" },
+  london: { city: "London", code: "LHR" },
+  dubai: { city: "Dubai", code: "DXB" },
+  singapore: { city: "Singapore", code: "SIN" },
+  sydney: { city: "Sydney", code: "SYD" },
+  toronto: { city: "Toronto", code: "YYZ" },
+  paris: { city: "Paris", code: "CDG" },
+};
+
+/* ---------- Destination dictionary ---------- */
+type DestSpec = Omit<Trip, "origin" | "flights" | "seedExpenses"> & {
+  code: string;
+  city: string;
+  country: string;
+  neighborhood: string;
+  airlines: string[];
+  basePrice: number;
+  flightHours: number;
+};
+
+const DESTINATIONS: Record<string, DestSpec> = {
+  germany: {
+    city: "Frankfurt",
+    country: "Germany",
+    code: "FRA",
+    neighborhood: "Sachsenhausen, Frankfurt",
+    airlines: ["Lufthansa", "Emirates", "Singapore Airlines"],
+    basePrice: 890,
+    flightHours: 9,
+    destination: { city: "Frankfurt", country: "Germany", code: "FRA", neighborhood: "Sachsenhausen, Frankfurt" },
+    restaurants: [
+      { name: "Zum Gemalten Haus", cuisine: "Traditional German", tag: "Apfelwein Certified", time: "7:00 PM – 9:00 PM" },
+      { name: "Kleinmarkthalle", cuisine: "Local Market Eats", tag: "Fresh & Regional", time: "10:00 AM – 12:00 PM" },
+      { name: "Adolf Wagner", cuisine: "Frankfurter Grüne Soße", tag: "Since 1931", time: "6:30 PM – 8:00 PM" },
+      { name: "Bitter & Zart", cuisine: "Chocolate Café", tag: "Vegan Options", time: "3:00 PM – 4:30 PM" },
+    ],
+    timeline: [
+      { day: "Day 1", hack: "Buy the Frankfurt Card at the airport — free transit + 50% on museums.",
+        slots: [
+          { period: "Morning", activity: "Römerberg square + Old Town walk" },
+          { period: "Afternoon", activity: "Städel Museum classic art collection" },
+          { period: "Evening", activity: "Apfelwein tasting in Sachsenhausen" },
+        ] },
+      { day: "Day 2", hack: "Take the ICE to Heidelberg — 50 min and worth the day trip.",
+        slots: [
+          { period: "Morning", activity: "Day trip: Heidelberg Castle" },
+          { period: "Afternoon", activity: "Philosophenweg viewpoint walk" },
+          { period: "Evening", activity: "Return to Frankfurt · dinner at Adolf Wagner" },
+        ] },
+      { day: "Day 3", hack: "Main Tower observation deck is €9 vs. €25 elsewhere — same skyline.",
+        slots: [
+          { period: "Morning", activity: "Palmengarten botanical park" },
+          { period: "Afternoon", activity: "Main Tower skyline view" },
+          { period: "Evening", activity: "Berger Straße bar crawl" },
+        ] },
+      { day: "Day 4", hack: "Rothenburg tours cost €80 — the regional train is €25 with a Bayern Ticket.",
+        slots: [
+          { period: "Morning", activity: "Day trip: Rothenburg ob der Tauber" },
+          { period: "Afternoon", activity: "Medieval wall walk + Käthe Wohlfahrt store" },
+          { period: "Evening", activity: "Return · farewell dinner Kleinmarkthalle" },
+        ] },
+      { day: "Day 5", hack: "Museumsufer combo ticket = 2 days, 39 museums, €21.",
+        slots: [
+          { period: "Morning", activity: "Museumsufer riverside museums" },
+          { period: "Afternoon", activity: "Goethe House + shopping Zeil" },
+          { period: "Evening", activity: "Sunset at Main River footbridge" },
+        ] },
+    ],
+    checkinPlaces: [
+      "Römerberg Square", "Städel Museum", "Main Tower", "Palmengarten",
+      "Sachsenhausen District", "Kleinmarkthalle", "Goethe House",
+      "Heidelberg Castle", "Rothenburg Old Town", "Berger Straße",
+    ],
+  },
+  paris: {
+    city: "Paris",
+    country: "France",
+    code: "CDG",
+    neighborhood: "Le Marais, Paris",
+    airlines: ["Air France", "United Airlines", "Delta"],
+    basePrice: 612,
+    flightHours: 7,
+    destination: { city: "Paris", country: "France", code: "CDG", neighborhood: "Le Marais, Paris" },
+    restaurants: [
+      { name: "Noglu", cuisine: "French Bistro", tag: "100% Celiac Safe", time: "11:30 AM – 1:00 PM" },
+      { name: "Chambelland", cuisine: "Bakery & Café", tag: "Gluten-Free Certified", time: "8:00 AM – 9:30 AM" },
+      { name: "NoGlu Marais", cuisine: "Modern French", tag: "Dedicated GF Kitchen", time: "6:30 PM – 7:45 PM" },
+      { name: "Café Pinson", cuisine: "Organic Vegan", tag: "Allergen Aware", time: "12:00 PM – 1:15 PM" },
+    ],
+    timeline: [
+      { day: "Day 1", hack: "Enter Notre-Dame via the side gate at 8:45 AM to skip 90-min queues.",
+        slots: [
+          { period: "Morning", activity: "Notre-Dame exterior + Île de la Cité walk" },
+          { period: "Afternoon", activity: "Sainte-Chapelle stained glass tour" },
+          { period: "Evening", activity: "Seine sunset stroll + dinner at Noglu" },
+        ] },
+      { day: "Day 2", hack: "Book Louvre entry for 6:00 PM — half the crowds, same masterpieces.",
+        slots: [
+          { period: "Morning", activity: "Musée d'Orsay (open at 9:30 AM)" },
+          { period: "Afternoon", activity: "Tuileries Garden + Palais Royal arcades" },
+          { period: "Evening", activity: "Louvre evening entry (Wed / Fri)" },
+        ] },
+      { day: "Day 3", hack: "Take the 82 bus, not the metro — cheaper views of the Eiffel Tower.",
+        slots: [
+          { period: "Morning", activity: "Trocadéro viewpoint + Eiffel Tower climb" },
+          { period: "Afternoon", activity: "Rodin Museum sculpture garden" },
+          { period: "Evening", activity: "Rue Cler food street tasting" },
+        ] },
+      { day: "Day 4", hack: "Père Lachaise map is free at the entrance — skip the paid tours.",
+        slots: [
+          { period: "Morning", activity: "Le Marais architecture walk" },
+          { period: "Afternoon", activity: "Picasso Museum (Marais)" },
+          { period: "Evening", activity: "Père Lachaise golden hour visit" },
+        ] },
+      { day: "Day 5", hack: "Versailles opens at 9 AM — arrive 8:30 to be first through the Hall of Mirrors.",
+        slots: [
+          { period: "Morning", activity: "RER C to Versailles — palace tour" },
+          { period: "Afternoon", activity: "Versailles gardens + Marie-Antoinette estate" },
+          { period: "Evening", activity: "Return to Paris — farewell dinner Le Marais" },
+        ] },
+    ],
+    checkinPlaces: [
+      "Notre-Dame Cathedral", "Louvre Museum", "Eiffel Tower", "Sainte-Chapelle",
+      "Musée d'Orsay", "Le Marais District", "Palais Royal", "Père Lachaise",
+      "Versailles Palace", "Rue Cler Market",
+    ],
+  },
+  barcelona: {
+    city: "Barcelona",
+    country: "Spain",
+    code: "BCN",
+    neighborhood: "El Born, Barcelona",
+    airlines: ["Vueling", "Iberia", "Lufthansa"],
+    basePrice: 540,
+    flightHours: 8,
+    destination: { city: "Barcelona", country: "Spain", code: "BCN", neighborhood: "El Born, Barcelona" },
+    restaurants: [
+      { name: "Cera 23", cuisine: "Modern Catalan", tag: "Chef's Tasting", time: "8:30 PM – 10:30 PM" },
+      { name: "Bar del Pla", cuisine: "Tapas Bar", tag: "Locals' Choice", time: "1:00 PM – 2:30 PM" },
+      { name: "Els 4 Gats", cuisine: "Modernist Bistro", tag: "Picasso's Haunt", time: "7:00 PM – 8:30 PM" },
+      { name: "Flax & Kale", cuisine: "Plant-Forward", tag: "Gluten-Free Menu", time: "12:30 PM – 1:45 PM" },
+    ],
+    timeline: [
+      { day: "Day 1", hack: "Sagrada Família tickets sell out 2 weeks ahead — book online first.",
+        slots: [
+          { period: "Morning", activity: "Sagrada Família tour + towers" },
+          { period: "Afternoon", activity: "Passeig de Gràcia — Casa Batlló + La Pedrera" },
+          { period: "Evening", activity: "Tapas crawl in El Born" },
+        ] },
+      { day: "Day 2", hack: "Park Güell free zone opens at 6 AM — sunrise skyline, no ticket.",
+        slots: [
+          { period: "Morning", activity: "Park Güell sunrise viewpoint" },
+          { period: "Afternoon", activity: "Gràcia neighborhood plazas" },
+          { period: "Evening", activity: "Bunkers del Carmel sunset" },
+        ] },
+      { day: "Day 3", hack: "Take the R2 train to Sitges — €4.50 vs €40 tours.",
+        slots: [
+          { period: "Morning", activity: "Day trip: Sitges beach" },
+          { period: "Afternoon", activity: "Old town + Bacardí Museum" },
+          { period: "Evening", activity: "Return · dinner at Cera 23" },
+        ] },
+      { day: "Day 4", hack: "Picasso Museum is FREE Thursday evenings 5-8 PM.",
+        slots: [
+          { period: "Morning", activity: "Gothic Quarter walk + Cathedral" },
+          { period: "Afternoon", activity: "Picasso Museum" },
+          { period: "Evening", activity: "Barceloneta seafood & beachfront" },
+        ] },
+      { day: "Day 5", hack: "Magic Fountain shows are free — check schedule (weekends only in winter).",
+        slots: [
+          { period: "Morning", activity: "Montjuïc castle cable car" },
+          { period: "Afternoon", activity: "MNAC museum + Poble Espanyol" },
+          { period: "Evening", activity: "Magic Fountain show finale" },
+        ] },
+    ],
+    checkinPlaces: [
+      "Sagrada Família", "Park Güell", "Casa Batlló", "La Pedrera",
+      "Gothic Quarter", "El Born", "Barceloneta Beach", "Picasso Museum",
+      "Montjuïc Castle", "La Rambla",
+    ],
+  },
+  tokyo: {
+    city: "Tokyo",
+    country: "Japan",
+    code: "HND",
+    neighborhood: "Shibuya, Tokyo",
+    airlines: ["ANA", "Japan Airlines", "Singapore Airlines"],
+    basePrice: 1180,
+    flightHours: 13,
+    destination: { city: "Tokyo", country: "Japan", code: "HND", neighborhood: "Shibuya, Tokyo" },
+    restaurants: [
+      { name: "Ichiran Shibuya", cuisine: "Tonkotsu Ramen", tag: "24/7 Solo Booths", time: "1:00 PM – 2:00 PM" },
+      { name: "Sushi Dai", cuisine: "Omakase Sushi", tag: "Toyosu Market Legend", time: "6:00 AM – 7:30 AM" },
+      { name: "Afuri Ebisu", cuisine: "Yuzu Ramen", tag: "Light Broth", time: "12:00 PM – 1:15 PM" },
+      { name: "T's Tantan", cuisine: "Vegan Ramen", tag: "100% Plant-Based", time: "7:00 PM – 8:15 PM" },
+    ],
+    timeline: [
+      { day: "Day 1", hack: "Get a Suica card at the airport — works on every train, bus, and konbini.",
+        slots: [
+          { period: "Morning", activity: "Meiji Shrine + Harajuku Takeshita Street" },
+          { period: "Afternoon", activity: "Shibuya Crossing + Hachikō statue" },
+          { period: "Evening", activity: "Shibuya Sky observation deck sunset" },
+        ] },
+      { day: "Day 2", hack: "TeamLab tickets are timed — book 3 weeks ahead or you're locked out.",
+        slots: [
+          { period: "Morning", activity: "TeamLab Planets immersive museum" },
+          { period: "Afternoon", activity: "Odaiba waterfront + Gundam statue" },
+          { period: "Evening", activity: "Tsukishima monjayaki street" },
+        ] },
+      { day: "Day 3", hack: "Enter Senso-ji at 6 AM for zero crowds and golden-hour photos.",
+        slots: [
+          { period: "Morning", activity: "Senso-ji Temple + Nakamise shopping street" },
+          { period: "Afternoon", activity: "Ueno Park + National Museum" },
+          { period: "Evening", activity: "Ameya-Yokochō market food crawl" },
+        ] },
+      { day: "Day 4", hack: "Skip the Ghibli Museum lottery — Ghibli Park in Nagoya has same-day tickets.",
+        slots: [
+          { period: "Morning", activity: "Shinjuku Gyoen garden walk" },
+          { period: "Afternoon", activity: "Tokyo Metropolitan Building free observation" },
+          { period: "Evening", activity: "Omoide Yokochō izakaya alley" },
+        ] },
+      { day: "Day 5", hack: "Day trip to Kamakura — 60 min on the Yokosuka Line, full temple day.",
+        slots: [
+          { period: "Morning", activity: "Day trip: Kamakura Great Buddha" },
+          { period: "Afternoon", activity: "Hasedera Temple + Enoshima" },
+          { period: "Evening", activity: "Return · farewell dinner Ichiran" },
+        ] },
+    ],
+    checkinPlaces: [
+      "Shibuya Crossing", "Meiji Shrine", "Senso-ji Temple", "Tokyo Skytree",
+      "Shinjuku Gyoen", "Harajuku Takeshita", "TeamLab Planets",
+      "Ueno Park", "Kamakura Great Buddha", "Toyosu Market",
+    ],
+  },
+  london: {
+    city: "London",
+    country: "United Kingdom",
+    code: "LHR",
+    neighborhood: "Shoreditch, London",
+    airlines: ["British Airways", "Virgin Atlantic", "American Airlines"],
+    basePrice: 720,
+    flightHours: 8,
+    destination: { city: "London", country: "United Kingdom", code: "LHR", neighborhood: "Shoreditch, London" },
+    restaurants: [
+      { name: "Dishoom Shoreditch", cuisine: "Bombay Café", tag: "Iconic Breakfast", time: "8:30 AM – 10:00 AM" },
+      { name: "Padella", cuisine: "Fresh Pasta", tag: "Borough Market", time: "12:30 PM – 1:45 PM" },
+      { name: "The Wolseley", cuisine: "European Grand Café", tag: "Afternoon Tea", time: "3:30 PM – 5:00 PM" },
+      { name: "Mildreds Soho", cuisine: "Global Vegetarian", tag: "Gluten-Free Menu", time: "7:00 PM – 8:30 PM" },
+    ],
+    timeline: [
+      { day: "Day 1", hack: "The Oyster card daily cap is £8.10 — never buy single tickets.",
+        slots: [
+          { period: "Morning", activity: "Tower of London + Tower Bridge" },
+          { period: "Afternoon", activity: "Borough Market food stalls" },
+          { period: "Evening", activity: "Shakespeare's Globe evening tour" },
+        ] },
+      { day: "Day 2", hack: "British Museum is FREE — arrive at 10 AM opening to beat groups.",
+        slots: [
+          { period: "Morning", activity: "British Museum · Rosetta Stone + Egypt" },
+          { period: "Afternoon", activity: "Covent Garden + street performers" },
+          { period: "Evening", activity: "West End show (day-of TKTS booth)" },
+        ] },
+      { day: "Day 3", hack: "Sky Garden viewpoint is free but requires online booking 3 weeks out.",
+        slots: [
+          { period: "Morning", activity: "Westminster + Big Ben + Parliament" },
+          { period: "Afternoon", activity: "Buckingham Palace changing of the guard" },
+          { period: "Evening", activity: "Sky Garden sunset (free entry)" },
+        ] },
+      { day: "Day 4", hack: "Take the Overground to Hackney — better markets, half the tourists.",
+        slots: [
+          { period: "Morning", activity: "Shoreditch street art walk" },
+          { period: "Afternoon", activity: "Columbia Road flower market (Sun)" },
+          { period: "Evening", activity: "Brick Lane curry mile dinner" },
+        ] },
+      { day: "Day 5", hack: "Windsor Castle: buy the Royal Windsor ticket at any station for combined fare.",
+        slots: [
+          { period: "Morning", activity: "Day trip: Windsor Castle" },
+          { period: "Afternoon", activity: "Eton College town walk" },
+          { period: "Evening", activity: "Return · farewell dinner Dishoom" },
+        ] },
+    ],
+    checkinPlaces: [
+      "Tower of London", "British Museum", "Buckingham Palace", "Westminster Abbey",
+      "Borough Market", "Shoreditch", "Sky Garden", "Covent Garden",
+      "Windsor Castle", "Camden Market",
+    ],
+  },
+};
+
+/* ---------- resolver: parse user query into a Trip ---------- */
+
+function resolveTrip(rawQuery: string): Trip {
+  const query = rawQuery.trim();
+  const lower = query.toLowerCase();
+
+  // parse "X to Y"
+  let originKey: string | null = null;
+  let destText: string = lower;
+  const m = lower.match(/(?:from\s+)?([a-z\s]+?)\s+to\s+([a-z\s]+)/i);
+  if (m) {
+    originKey = m[1].trim();
+    destText = m[2].trim();
+  }
+
+  // detect destination from dictionary — search first known keyword in destText
+  let destKey: string | null = null;
+  for (const key of Object.keys(DESTINATIONS)) {
+    if (destText.includes(key)) {
+      destKey = key;
+      break;
+    }
+  }
+  // also try full query (in case destText missed it)
+  if (!destKey) {
+    for (const key of Object.keys(DESTINATIONS)) {
+      if (lower.includes(key)) {
+        destKey = key;
+        break;
+      }
+    }
+  }
+
+  const origin = originKey
+    ? (ORIGIN_CODES[originKey] ?? {
+        city: cap(originKey),
+        code: originKey.replace(/[^a-z]/g, "").slice(0, 3).toUpperCase() || "ORG",
+      })
+    : { city: "New York", code: "JFK" };
+
+  if (destKey) {
+    const d = DESTINATIONS[destKey];
+    const flights = buildFlights(origin.code, d.code, d.airlines, d.basePrice, d.flightHours);
+    return {
+      origin,
+      destination: d.destination,
+      flights,
+      restaurants: d.restaurants,
+      timeline: d.timeline,
+      checkinPlaces: d.checkinPlaces,
+      seedExpenses: seedExpenses(d.basePrice, d.city),
+    };
+  }
+
+  // fallback: unknown destination — interpolate raw input
+  const fallbackCity = cap(destText || query || "Your destination");
+  const code = fallbackCity.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "DST";
+  const base = 700;
+  const hours = 8;
+  return {
+    origin,
+    destination: {
+      city: fallbackCity,
+      country: fallbackCity,
+      code,
+      neighborhood: `Central ${fallbackCity}`,
+    },
+    flights: buildFlights(origin.code, code, ["Emirates", "Qatar Airways", "Turkish Airlines"], base, hours),
+    restaurants: [
+      { name: `${fallbackCity} Central Bistro`, cuisine: "Local Favorites", tag: "Highly Rated", time: "12:30 PM – 2:00 PM" },
+      { name: `Old Town ${fallbackCity}`, cuisine: "Traditional", tag: "Locals' Pick", time: "7:00 PM – 9:00 PM" },
+      { name: `${fallbackCity} Street Market`, cuisine: "Street Food", tag: "Cash-Friendly", time: "6:00 PM – 8:00 PM" },
+      { name: `Café ${fallbackCity}`, cuisine: "Brunch & Coffee", tag: "Vegetarian Friendly", time: "9:00 AM – 10:30 AM" },
+    ],
+    timeline: [1, 2, 3, 4, 5].map((n) => ({
+      day: `Day ${n}`,
+      hack: `Ask a local guide for hidden ${fallbackCity} spots — often free walking tours run daily.`,
+      slots: [
+        { period: "Morning", activity: `Explore central ${fallbackCity} landmarks` },
+        { period: "Afternoon", activity: `${fallbackCity} museum + cultural district` },
+        { period: "Evening", activity: `Dinner + nightlife in ${fallbackCity}` },
+      ],
+    })),
+    checkinPlaces: [
+      `${fallbackCity} Old Town`,
+      `${fallbackCity} Central Square`,
+      `${fallbackCity} Main Cathedral`,
+      `${fallbackCity} Riverside`,
+      `${fallbackCity} Market District`,
+      `${fallbackCity} Art Museum`,
+      `${fallbackCity} Botanical Gardens`,
+      `${fallbackCity} Viewpoint`,
+    ],
+    seedExpenses: seedExpenses(base, fallbackCity),
+  };
+}
+
+function cap(s: string) {
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function buildFlights(originCode: string, destCode: string, airlines: string[], basePrice: number, hours: number): Flight[] {
+  const route = `${originCode} → ${destCode}`;
+  return airlines.slice(0, 3).map((airline, i) => {
+    const price = basePrice + i * 78;
+    const buy = i === 0;
+    return {
+      airline,
+      route,
+      duration: `${hours + i}h ${(10 + i * 15) % 60}m`,
+      price: `$${price}`,
+      verdict: buy ? "BUY NOW" : "WAIT FOR DROP",
+      confidence: 94 - i * 8,
+    };
+  });
+}
+
+function seedExpenses(flightPrice: number, city: string): Expense[] {
+  const now = Date.now();
+  return [
+    { id: "e1", label: `Flight round-trip to ${city}`, amount: flightPrice, category: "Flight", timestamp: now - 8e7 },
+    { id: "e2", label: `Hotel · ${city} · 5 nights`, amount: 720, category: "Accommodation", timestamp: now - 7e7 },
+    { id: "e3", label: `Welcome dinner in ${city}`, amount: 62, category: "Food", timestamp: now - 6e7 },
+    { id: "e4", label: `Museum & attraction passes`, amount: 45, category: "Transit", timestamp: now - 5e7 },
+    { id: "e5", label: `Local transit pass · ${city}`, amount: 24, category: "Transit", timestamp: now - 4e7 },
+  ];
+}
+
+/* ============================================================
+   TRAVEL APP
+   ============================================================ */
+
 function TravelApp({ onSignOut }: { onSignOut: () => void }) {
   const [view, setView] = useState<View>("landing");
   const [query, setQuery] = useState("");
+  const [trip, setTrip] = useState<Trip | null>(null);
   const [active, setActive] = useState<Set<string>>(new Set(["🌱 Gluten-Free", "🏛️ Architecture"]));
 
   useEffect(() => {
@@ -213,6 +695,7 @@ function TravelApp({ onSignOut }: { onSignOut: () => void }) {
 
   const generate = () => {
     if (!query.trim()) return;
+    setTrip(resolveTrip(query));
     setView("loading");
   };
 
@@ -225,7 +708,7 @@ function TravelApp({ onSignOut }: { onSignOut: () => void }) {
         <Landing query={query} setQuery={setQuery} active={active} toggle={toggle} onGenerate={generate} />
       )}
       {view === "loading" && <Loading query={query} />}
-      {view === "dashboard" && <Dashboard query={query} active={active} onReset={reset} />}
+      {view === "dashboard" && trip && <Dashboard query={query} trip={trip} active={active} onReset={reset} />}
       <Footer />
     </div>
   );
@@ -300,7 +783,7 @@ function Landing({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && onGenerate()}
-              placeholder="e.g., Flying from JFK to Paris for 5 days, moderate budget, strictly gluten-free, love architecture but hate crowds..."
+              placeholder="e.g., Chennai to Germany for 5 days · try Paris, Tokyo, Barcelona, London..."
               className="flex-1 rounded-xl bg-slate-900/60 px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-emerald-400/50"
             />
             <button
@@ -387,11 +870,11 @@ function Loading({ query }: { query: string }) {
   );
 }
 
-function Dashboard({ query, active, onReset }: { query: string; active: Set<string>; onReset: () => void }) {
+function Dashboard({ query, trip, active, onReset }: { query: string; trip: Trip; active: Set<string>; onReset: () => void }) {
   const [tab, setTab] = useState<Tab>("planner");
   const [visits, setVisits] = useState<Visit[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
+  const [expenses, setExpenses] = useState<Expense[]>(trip.seedExpenses);
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: "planner", label: "AI Planner", icon: "🗺️" },
@@ -399,12 +882,16 @@ function Dashboard({ query, active, onReset }: { query: string; active: Set<stri
     { id: "journal", label: "Travel Journal", icon: "📸" },
   ];
 
+  const headline = `${trip.origin.code} → ${trip.destination.city} · 5 days`;
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="text-xs font-medium uppercase tracking-wider text-emerald-400">Your itinerary</div>
-          <h2 className="mt-1 truncate text-2xl font-bold sm:text-3xl">JFK → Paris · 5 days</h2>
+          <div className="text-xs font-medium uppercase tracking-wider text-emerald-400">
+            Your itinerary · {trip.destination.country}
+          </div>
+          <h2 className="mt-1 truncate text-2xl font-bold sm:text-3xl">{headline}</h2>
           <p className="mt-1 truncate text-sm text-white/50">"{query}"</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -419,7 +906,6 @@ function Dashboard({ query, active, onReset }: { query: string; active: Set<stri
         </div>
       </div>
 
-      {/* Tab bar */}
       <div className="mb-8 flex gap-1 rounded-2xl border border-white/10 bg-white/5 p-1 backdrop-blur">
         {tabs.map((t) => {
           const on = tab === t.id;
@@ -441,31 +927,41 @@ function Dashboard({ query, active, onReset }: { query: string; active: Set<stri
       </div>
 
       <div className="animate-[fade-in_0.4s_ease-out]" key={tab}>
-        {tab === "planner" && <PlannerTab expenses={expenses} />}
-        {tab === "navigator" && <NavigatorTab visits={visits} setVisits={setVisits} />}
-        {tab === "journal" && <JournalTab photos={photos} setPhotos={setPhotos} expenses={expenses} setExpenses={setExpenses} />}
+        {tab === "planner" && <PlannerTab trip={trip} expenses={expenses} />}
+        {tab === "navigator" && <NavigatorTab trip={trip} visits={visits} setVisits={setVisits} />}
+        {tab === "journal" && (
+          <JournalTab trip={trip} photos={photos} setPhotos={setPhotos} expenses={expenses} setExpenses={setExpenses} />
+        )}
       </div>
     </main>
   );
 }
 
-function PlannerTab({ expenses }: { expenses: Expense[] }) {
+function PlannerTab({ trip, expenses }: { trip: Trip; expenses: Expense[] }) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
-        <FlightWidget />
-        <TimelineWidget />
+        <FlightWidget flights={trip.flights} />
+        <TimelineWidget timeline={trip.timeline} city={trip.destination.city} />
       </div>
       <div className="space-y-6">
-        <LivingDock />
+        <LivingDock restaurants={trip.restaurants} neighborhood={trip.destination.neighborhood} />
         <BudgetWidget expenses={expenses} />
       </div>
     </div>
   );
 }
 
-function NavigatorTab({ visits, setVisits }: { visits: Visit[]; setVisits: React.Dispatch<React.SetStateAction<Visit[]>> }) {
-  const [selectedPlace, setSelectedPlace] = useState(CHECKIN_PLACES[0]);
+function NavigatorTab({
+  trip,
+  visits,
+  setVisits,
+}: {
+  trip: Trip;
+  visits: Visit[];
+  setVisits: React.Dispatch<React.SetStateAction<Visit[]>>;
+}) {
+  const [selectedPlace, setSelectedPlace] = useState(trip.checkinPlaces[0]);
   const [directionsFor, setDirectionsFor] = useState<string | null>(null);
 
   const active = visits.find((v) => !v.endedAt);
@@ -485,7 +981,7 @@ function NavigatorTab({ visits, setVisits }: { visits: Visit[]; setVisits: React
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2 space-y-6">
-        <Card title="Active Trip Tracker" icon="📍">
+        <Card title={`Active Trip Tracker · ${trip.destination.city}`} icon="📍">
           <div className="rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 to-indigo-500/10 p-5">
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-emerald-300">
               <span className="relative flex h-2 w-2">
@@ -506,7 +1002,7 @@ function NavigatorTab({ visits, setVisits }: { visits: Visit[]; setVisits: React
               onChange={(e) => setSelectedPlace(e.target.value)}
               className="flex-1 rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-white outline-none focus:border-emerald-400/50"
             >
-              {CHECKIN_PLACES.map((p) => (
+              {trip.checkinPlaces.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
@@ -596,11 +1092,11 @@ function NavigatorTab({ visits, setVisits }: { visits: Visit[]; setVisits: React
             />
           </div>
         </Card>
-        <Card title="Nearby Now" icon="🌐">
+        <Card title={`Nearby in ${trip.destination.city}`} icon="🌐">
           <div className="space-y-2">
-            {["Café de Flore · 2 min walk", "Metro Saint-Michel · 4 min", "Shakespeare & Co · 6 min"].map((p) => (
+            {trip.checkinPlaces.slice(0, 3).map((p, i) => (
               <div key={p} className="rounded-lg border border-white/5 bg-slate-900/40 px-3 py-2 text-sm text-white/80">
-                {p}
+                {p} · {2 + i * 2} min walk
               </div>
             ))}
           </div>
@@ -717,11 +1213,13 @@ function Stat({ label, value }: { label: string; value: string }) {
 /* --------------------- JOURNAL TAB --------------------- */
 
 function JournalTab({
+  trip,
   photos,
   setPhotos,
   expenses,
   setExpenses,
 }: {
+  trip: Trip;
   photos: Photo[];
   setPhotos: React.Dispatch<React.SetStateAction<Photo[]>>;
   expenses: Expense[];
@@ -730,8 +1228,8 @@ function JournalTab({
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2 space-y-6">
-        <Card title="Trip Memories" icon="📸">
-          <UploadZone photos={photos} setPhotos={setPhotos} />
+        <Card title={`${trip.destination.city} Memories`} icon="📸">
+          <UploadZone trip={trip} photos={photos} setPhotos={setPhotos} />
           <PhotoGallery photos={photos} setPhotos={setPhotos} />
         </Card>
       </div>
@@ -743,15 +1241,17 @@ function JournalTab({
 }
 
 function UploadZone({
-  photos,
+  trip,
+  photos: _photos,
   setPhotos,
 }: {
+  trip: Trip;
   photos: Photo[];
   setPhotos: React.Dispatch<React.SetStateAction<Photo[]>>;
 }) {
   const [dragging, setDragging] = useState(false);
-  const [day, setDay] = useState(TIMELINE[0].day);
-  const [place, setPlace] = useState(CHECKIN_PLACES[0]);
+  const [day, setDay] = useState(trip.timeline[0].day);
+  const [place, setPlace] = useState(trip.checkinPlaces[0]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const addFiles = (files: FileList | File[]) => {
@@ -790,14 +1290,14 @@ function UploadZone({
           onChange={(e) => setDay(e.target.value)}
           className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
         >
-          {TIMELINE.map((d) => <option key={d.day}>{d.day}</option>)}
+          {trip.timeline.map((d) => <option key={d.day}>{d.day}</option>)}
         </select>
         <select
           value={place}
           onChange={(e) => setPlace(e.target.value)}
           className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/50"
         >
-          {CHECKIN_PLACES.map((p) => <option key={p}>{p}</option>)}
+          {trip.checkinPlaces.map((p) => <option key={p}>{p}</option>)}
         </select>
       </div>
       <div
@@ -834,7 +1334,6 @@ function UploadZone({
           + Add simulated photo
         </button>
       </div>
-      <div className="mt-2 text-right text-xs text-white/40">{photos.length} photo{photos.length === 1 ? "" : "s"} in this trip</div>
     </div>
   );
 }
@@ -855,48 +1354,38 @@ function PhotoGallery({
     return g;
   }, [photos]);
 
-  const updateCaption = (id: string, caption: string) => {
+  const setCaption = (id: string, caption: string) =>
     setPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, caption } : p)));
-  };
 
   const remove = (id: string) => setPhotos((prev) => prev.filter((p) => p.id !== id));
 
   if (photos.length === 0) {
     return (
-      <div className="mt-6 rounded-xl border border-dashed border-white/10 bg-slate-900/40 p-8 text-center text-sm text-white/40">
-        Your memories will appear here as beautiful grouped cards.
+      <div className="mt-4 rounded-xl border border-dashed border-white/10 bg-slate-900/40 p-6 text-center text-sm text-white/40">
+        Your gallery is empty — add photos above to build your travel journal.
       </div>
     );
   }
 
   return (
     <div className="mt-6 space-y-6">
-      {Object.entries(grouped).map(([group, items]) => (
-        <div key={group}>
-          <div className="mb-3 flex items-center gap-2">
-            <div className="h-px flex-1 bg-white/10" />
-            <div className="text-xs font-bold uppercase tracking-wider text-emerald-300">{group}</div>
-            <div className="h-px flex-1 bg-white/10" />
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {Object.entries(grouped).map(([key, items]) => (
+        <div key={key}>
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-emerald-300">{key}</div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {items.map((p) => (
-              <div key={p.id} className="group overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur transition hover:border-emerald-400/40 hover:shadow-xl hover:shadow-emerald-500/10">
-                <div className="relative aspect-[4/3] overflow-hidden bg-slate-950">
-                  <img src={p.url} alt={p.caption || p.place} className="h-full w-full object-cover transition group-hover:scale-105" />
-                  <button
-                    onClick={() => remove(p.id)}
-                    className="absolute right-2 top-2 rounded-md bg-slate-900/80 px-2 py-1 text-[10px] font-bold text-red-300 opacity-0 transition group-hover:opacity-100 hover:bg-red-500/30"
-                  >
-                    Remove
-                  </button>
-                  <div className="absolute bottom-2 left-2 rounded-md bg-slate-900/70 px-2 py-0.5 text-[10px] font-medium text-white/80 backdrop-blur">
-                    {new Date(p.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </div>
-                </div>
+              <div key={p.id} className="group relative overflow-hidden rounded-xl border border-white/5 bg-slate-900/40">
+                <img src={p.url} alt="" className="aspect-[4/3] w-full object-cover transition group-hover:scale-105" />
+                <button
+                  onClick={() => remove(p.id)}
+                  className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100 hover:bg-red-500"
+                >
+                  ✕
+                </button>
                 <input
                   value={p.caption}
-                  onChange={(e) => updateCaption(p.id, e.target.value)}
-                  placeholder="Write a caption or journal note…"
+                  onChange={(e) => setCaption(p.id, e.target.value)}
+                  placeholder="Add caption..."
                   className="w-full bg-transparent px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none"
                 />
               </div>
@@ -1038,11 +1527,11 @@ function Card({ title, icon, children }: { title: string; icon: string; children
   );
 }
 
-function FlightWidget() {
+function FlightWidget({ flights }: { flights: Flight[] }) {
   return (
     <Card title="Flight & Price Intelligence" icon="✈️">
       <div className="space-y-3">
-        {FLIGHTS.map((f) => {
+        {flights.map((f) => {
           const buy = f.verdict === "BUY NOW";
           return (
             <div
@@ -1071,17 +1560,17 @@ function FlightWidget() {
   );
 }
 
-function LivingDock() {
+function LivingDock({ restaurants, neighborhood }: { restaurants: Restaurant[]; neighborhood: string }) {
   return (
     <Card title="Living & Restaurant Dock" icon="🏨">
       <div className="rounded-xl border border-indigo-400/30 bg-gradient-to-br from-indigo-500/10 to-emerald-500/10 p-4">
         <div className="text-xs font-medium uppercase tracking-wider text-indigo-300">Recommended neighborhood</div>
-        <div className="mt-1 text-lg font-bold">Le Marais, Paris</div>
+        <div className="mt-1 text-lg font-bold">{neighborhood}</div>
         <div className="mt-1 text-sm text-white/70">Best for architecture & low commute times</div>
       </div>
       <div className="mt-4 space-y-2">
         <div className="text-xs font-medium uppercase tracking-wider text-white/40">Curated restaurants</div>
-        {RESTAURANTS.map((r) => (
+        {restaurants.map((r) => (
           <div key={r.name} className="rounded-lg border border-white/5 bg-slate-900/40 p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -1103,11 +1592,11 @@ function LivingDock() {
   );
 }
 
-function TimelineWidget() {
+function TimelineWidget({ timeline, city }: { timeline: TimelineDay[]; city: string }) {
   return (
-    <Card title="Master Route-Optimized Timeline" icon="🗺️">
+    <Card title={`Route-Optimized Timeline · ${city}`} icon="🗺️">
       <div className="relative space-y-6 pl-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-px before:bg-gradient-to-b before:from-emerald-400/50 before:via-indigo-400/50 before:to-transparent">
-        {TIMELINE.map((day) => (
+        {timeline.map((day) => (
           <div key={day.day} className="relative">
             <div className="absolute -left-[22px] top-1 h-4 w-4 rounded-full border-2 border-slate-900 bg-gradient-to-br from-emerald-400 to-indigo-500" />
             <div className="flex flex-wrap items-center gap-2">
