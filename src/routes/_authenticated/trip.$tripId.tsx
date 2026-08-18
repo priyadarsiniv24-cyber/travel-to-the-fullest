@@ -191,16 +191,134 @@ function TripDetail() {
           </section>
 
           <section className="panel rounded-2xl p-6">
-            <h2 className="font-display text-lg font-semibold">Itinerary</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              No days have been generated for this trip yet. The itinerary engine — with realistic
-              travel times, geographic clustering and drag-to-reorder editing — is the next build
-              phase. Your brief below is what it will plan against.
-            </p>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-display text-lg font-semibold">Day-by-day itinerary</h2>
+              <DataStatusBadge status="ai_recommendation" />
+            </div>
+            {days.length === 0 ? (
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                No days have been generated for this trip yet. Describe it to the AI planner and
+                it will build a realistic day-by-day plan.
+              </p>
+            ) : (
+              <div className="mt-5 space-y-7">
+                {days.map((day) => (
+                  <div key={day.id}>
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <h3 className="font-display text-base font-semibold uppercase tracking-wide">
+                        Day {day.day_index}
+                        {day.location ? ` — ${day.location}` : ""}
+                      </h3>
+                      {day.day_date ? (
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(day.day_date).toLocaleDateString(undefined, {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                          })}
+                        </span>
+                      ) : null}
+                    </div>
+                    {day.notes ? (
+                      <p className="mt-1 text-sm text-muted-foreground">{day.notes}</p>
+                    ) : null}
+                    <ol className="mt-3 space-y-2.5 border-l border-hairline pl-4">
+                      {itemsByDay.get(day.id)?.map((item) => (
+                        <li key={item.id} className="relative rounded-2xl border border-hairline bg-surface/70 p-3.5">
+                          <span className="absolute -left-[21px] top-5 size-2.5 rounded-full bg-primary" aria-hidden="true" />
+                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                            {item.start_time ? (
+                              <span className="font-mono text-xs font-semibold text-primary-foreground/80">
+                                {item.start_time}
+                              </span>
+                            ) : null}
+                            <span className="text-sm font-semibold">{item.title}</span>
+                            {item.duration_minutes ? (
+                              <span className="text-xs text-muted-foreground">
+                                {formatMinutes(item.duration_minutes)}
+                              </span>
+                            ) : null}
+                          </div>
+                          {item.description ? (
+                            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                              {item.description}
+                            </p>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+                            {item.location ? <span>📍 {item.location}</span> : null}
+                            {item.travel_minutes ? (
+                              <span>
+                                🚶 {formatMinutes(item.travel_minutes)} travel
+                                {item.transport_mode ? ` · ${item.transport_mode}` : ""}
+                              </span>
+                            ) : null}
+                            {item.estimated_cost !== null && item.estimated_cost !== undefined ? (
+                              <span>
+                                ~{formatMoney(Number(item.estimated_cost), item.currency ?? trip.display_currency)} est.
+                              </span>
+                            ) : null}
+                            {typeof (item.metadata as { bestTime?: string })?.bestTime === "string" ? (
+                              <span>⏰ {(item.metadata as { bestTime?: string }).bestTime}</span>
+                            ) : null}
+                            {item.location ? (
+                              <a
+                                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                                  `${item.location}, ${trip.destination}`,
+                                )}`}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="font-medium text-foreground underline decoration-primary decoration-2 underline-offset-2"
+                              >
+                                Get directions ↗
+                              </a>
+                            ) : null}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ))}
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Timings, durations and costs are AI estimates in {trip.display_currency}. Opening
+                  hours and prices are typical, not verified — please check before you go.
+                </p>
+              </div>
+            )}
           </section>
         </div>
 
         <aside className="space-y-6">
+          {estimateLines.length ? (
+            <section className="panel rounded-2xl p-6">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-display text-lg font-semibold">Estimated budget</h2>
+                <DataStatusBadge status="estimated" />
+              </div>
+              <ul className="mt-4 space-y-2 text-sm">
+                {estimateLines.map((line) => (
+                  <li key={line.id} className="flex items-baseline justify-between gap-3">
+                    <span className="text-muted-foreground">
+                      {EXPENSE_CATEGORY_LABEL[line.category as ExpenseCategory]}
+                      {line.description ? ` · ${line.description}` : ""}
+                    </span>
+                    <span className="font-medium">
+                      {formatMoney(Number(line.estimated_amount), line.currency)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 flex items-baseline justify-between border-t border-hairline pt-3">
+                <span className="text-sm font-semibold">Estimated total</span>
+                <span className="font-display text-lg font-semibold">
+                  {formatMoney(estimatedTotal, trip.display_currency)}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Modelled estimate in the destination's local currency — not a quoted price.
+              </p>
+            </section>
+          ) : null}
+
           <section className="panel rounded-2xl p-6">
             <h2 className="font-display text-lg font-semibold">The brief</h2>
             <dl className="mt-4 space-y-3 text-sm">
@@ -213,6 +331,7 @@ function TripDetail() {
               <Row label="Notes" value={trip.brief} />
             </dl>
           </section>
+
 
           <section className="rounded-2xl border border-hairline p-5">
             <h3 className="text-sm font-semibold">How to read this page</h3>
