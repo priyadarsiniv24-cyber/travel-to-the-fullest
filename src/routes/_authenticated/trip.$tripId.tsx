@@ -7,12 +7,22 @@ import { DataStatusBadge, NotConfiguredPanel } from "@/components/DataStatusBadg
 import { searchTravelOptions } from "@/lib/search.functions";
 import { getTrip } from "@/lib/trips.functions";
 import {
+  EXPENSE_CATEGORY_LABEL,
   TRIP_STATUS_LABEL,
   formatDateRange,
   formatMoney,
   tripNights,
+  type ExpenseCategory,
   type TripStatus,
 } from "@/lib/travel";
+
+function formatMinutes(mins: number) {
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 
 export const Route = createFileRoute("/_authenticated/trip/$tripId")({
   head: () => ({
