@@ -7,12 +7,22 @@ import { DataStatusBadge, NotConfiguredPanel } from "@/components/DataStatusBadg
 import { searchTravelOptions } from "@/lib/search.functions";
 import { getTrip } from "@/lib/trips.functions";
 import {
+  EXPENSE_CATEGORY_LABEL,
   TRIP_STATUS_LABEL,
   formatDateRange,
   formatMoney,
   tripNights,
+  type ExpenseCategory,
   type TripStatus,
 } from "@/lib/travel";
+
+function formatMinutes(mins: number) {
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 
 export const Route = createFileRoute("/_authenticated/trip/$tripId")({
   head: () => ({
@@ -88,8 +98,41 @@ function TripDetail() {
   const flightLinks = availability.data?.links.filter((l) => l.kind === "flights") ?? [];
   const stayLinks = availability.data?.links.filter((l) => l.kind === "stays") ?? [];
 
+  const days = data?.days ?? [];
+  const items = data?.items ?? [];
+  const itemsByDay = new Map<string, typeof items>();
+  for (const item of items) {
+    if (!item.day_id) continue;
+    const bucket = itemsByDay.get(item.day_id) ?? [];
+    bucket.push(item);
+    itemsByDay.set(item.day_id, bucket);
+  }
+  const estimateLines = (data?.expenses ?? []).filter(
+    (e) => e.estimated_amount !== null && e.estimated_amount !== undefined,
+  );
+  const estimatedTotal = estimateLines.reduce((sum, e) => sum + Number(e.estimated_amount), 0);
+
+  const tripContext = [
+    `Trip: ${trip.title} — ${trip.origin} → ${trip.destination}`,
+    `Dates: ${formatDateRange(trip.start_date, trip.end_date)}`,
+    `Travellers: ${trip.adults} adults, ${trip.children} children · pace ${trip.activity_intensity}`,
+    `Currency: ${trip.display_currency}${trip.budget_amount ? ` · budget ${trip.budget_amount}` : ""}`,
+    `Interests: ${trip.interests?.join(", ") || "not specified"}`,
+    days.length
+      ? `Itinerary:\n${days
+          .map(
+            (d) =>
+              `Day ${d.day_index}${d.location ? ` (${d.location})` : ""}: ${(itemsByDay.get(d.id) ?? [])
+                .map((i) => `${i.start_time ?? ""} ${i.title}`.trim())
+                .join("; ")}`,
+          )
+          .join("\n")}`
+      : "Itinerary: none generated yet.",
+  ].join("\n");
+
   return (
-    <AppShell>
+    <AppShell tripContext={tripContext}>
+
       <Link to="/trips" className="text-sm text-muted-foreground hover:text-foreground">
         ← My trips
       </Link>
